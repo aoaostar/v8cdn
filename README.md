@@ -9,7 +9,7 @@
 </p>
 
 ### What's this？
-这是一款`cloudflare partner`面板程序，后端基于`gin`，前端使用`vue.js`。
+这是一款`Cloudflare Partner`面板程序，后端基于`gin`，前端使用`vue.js`。
 
 ### 前端项目地址
 
@@ -26,8 +26,8 @@
 
 ### 部署
 
-* 配置说明
-
+#### 配置说明
+* 后端配置
 ```shell
 app_name: v8cdn # 应用名称
 debug: false # Debug
@@ -42,8 +42,15 @@ RateLimit:
   fill_interval: 30 # 时间周期，单位：秒
   capacity: 30  # 单位时间周期内最大只能请求多少次，超过了返回频率限制error
 ```
-
-* 使用说明
+* 前端配置
+```js
+window['V8CDN'] = {
+    appName: "V8CDN", // 项目名称
+    apiUrl: "//cdn.v8cdn.cc", // 后端api
+    instructions: "https://blog.aoaostar.com/10.html", // 使用说明跳转地址
+}
+```
+#### 使用说明
     + `releases`下载对应的包
     + 然后运行即可
 
@@ -82,6 +89,7 @@ WantedBy=multi-user.target
 
 ### 反向代理
 
+* 由于项目运行在`8080`端口，所以需要`nginx`反向代理
 ```
 location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -92,9 +100,9 @@ location / {
 }
 ```
 
-* 使用`gin`代理静态资源需要注释一下内容
+* 使用`gin`代理静态资源需要注释以下内容，否则静态文件无法加载
 
-```shell
+```
 location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$
 {
     expires      30d;
@@ -111,8 +119,43 @@ location ~ .*\.(js|css)?$
 
 ### 配置前端
 
-* 修改前端项目更目录下的`config.js`内容为你的后端地址
-* 没有`cloudflare partner`的可以使用别人的后端`api`
+* 下载前端
+<https://github.com/aoaostar/v8cdn-panel/releases>
+* 将`dist`目录复制到后端根目录
+* 修改前端项目根目录下的`config.js`内容
+* 没有`Cloudflare Partner`的可以使用别人的后端`api`，这样无需搭建后端，只需要配置前端的`api`就行了
+* 没看懂看下方目录结构
+
+#### 目录结构
+```shell
+.
+├── config.yaml
+├── dist
+│   ├── config.js
+│   ├── css
+│   │   ├── app.51c8db65.css
+│   │   └── chunk-vendors.3ec84ff3.css
+│   ├── favicon.ico
+│   ├── fonts
+│   │   ├── element-icons.535877f5.woff
+│   │   └── element-icons.732389de.ttf
+│   ├── img
+│   │   ├── logo.2afbdd11.png
+│   │   ├── prototype-1.61488008.png
+│   │   ├── prototype-2.6cdf2ad6.png
+│   │   ├── prototype-3.12a59943.png
+│   │   └── prototype-4.723e3a43.png
+│   ├── index.html
+│   └── js
+│       ├── app.d4502f7d.js
+│       ├── app.d4502f7d.js.map
+│       ├── chunk-vendors.3f91d629.js
+│       └── chunk-vendors.3f91d629.js.map
+├── logs
+│   └── 2021-09-07.log
+└── v8cdn
+```
+
 
 ### 交叉编译
 
