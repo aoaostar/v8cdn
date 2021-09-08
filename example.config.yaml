@@ -1,0 +1,12 @@
+app_name: v8cdn
+debug: false
+listen: 0.0.0.0:8080
+jwt_secret: v8cdn
+static: dist
+cloudflare:
+  email: email
+  host_key: host_key
+RateLimit:
+  enabled: false
+  fill_interval: 30
+  capacity: 30
