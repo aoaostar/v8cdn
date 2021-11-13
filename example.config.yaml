@@ -6,6 +6,7 @@ static: dist
 cloudflare:
   email: email
   host_key: host_key
+  default_record: v8cdn.cc
 RateLimit:
   enabled: false
   fill_interval: 30

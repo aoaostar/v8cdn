@@ -1,4 +1,4 @@
-package config
+package pkg
 
 import ut "github.com/go-playground/universal-translator"
 

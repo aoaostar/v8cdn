@@ -1,4 +1,4 @@
-package config
+package pkg
 
 import (
 	"github.com/patrickmn/go-cache"

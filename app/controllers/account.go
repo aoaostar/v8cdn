@@ -18,12 +18,3 @@ func AccountDetails(c *gin.Context) {
 		"info":     info,
 	})
 }
-func UserDetails(c *gin.Context) {
-
-	cf := c.MustGet("cloudflare").(*cloudflare.API)
-	userDetails, _ := cf.UserDetails(c)
-	c.JSON(http.StatusOK, gin.H{
-		"userDetails": userDetails,
-	})
-
-}

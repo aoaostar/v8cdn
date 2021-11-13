@@ -36,7 +36,8 @@ jwt_secret: v8cdn # jwt秘钥，自己随便设置
 static: dist # 前端目录
 cloudflare:
   email: email # cloudflare partner邮箱
-  host_key: host_key # cloudflare partner host_key
+  host_key: host_key # cloudflare partner host_key，留空将使用用户的Global API Key进行管理
+  default_record: v8cdn.cc # 添加域名是默认解析的cname地址
 RateLimit:
   enabled: false # 是否启用api请求频率限制
   fill_interval: 30 # 时间周期，单位：秒
@@ -45,9 +46,10 @@ RateLimit:
 * 前端配置
 ```js
 window['V8CDN'] = {
-    appName: "V8CDN", // 项目名称
-    apiUrl: "//cdn.v8cdn.cc", // 后端api
-    instructions: "https://blog.aoaostar.com/10.html", // 使用说明跳转地址
+  appName: "V8CDN", // 项目名称
+  authType: "partner", // 认证模式 user_api_key or partner，user_api_key模式需要用户的Global API Key
+  apiUrl: "//cdn.v8cdn.cc", // 后端api
+  instructions: "https://blog.aoaostar.com/10.html", // 使用说明跳转地址
 }
 ```
 #### 使用说明
@@ -124,6 +126,7 @@ location ~ .*\.(js|css)?$
 * 将`dist`目录复制到后端根目录
 * 修改前端项目根目录下的`config.js`内容
 * 没有`Cloudflare Partner`的可以使用别人的后端`api`，这样无需搭建后端，只需要配置前端的`api`就行了
+* 也可以使用`Cloudfalre`提供的的`Global API Key`
 * 没看懂看下方目录结构
 
 #### 目录结构
@@ -152,7 +155,7 @@ location ~ .*\.(js|css)?$
 │       ├── chunk-vendors.3f91d629.js
 │       └── chunk-vendors.3f91d629.js.map
 ├── logs
-│   └── 2021-09-07.log
+│   └── v8cdn.log
 └── v8cdn
 ```
 

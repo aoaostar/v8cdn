@@ -1,4 +1,4 @@
-package config
+package pkg
 
 type Config struct {
 	AppName    string `mapstructure:"app_name"`
@@ -8,6 +8,7 @@ type Config struct {
 	Cloudflare struct {
 		Email   string `mapstructure:"email"`
 		HostKey string `mapstructure:"host_key"`
+		DefaultRecord string `mapstructure:"default_record"`
 	}
 	JwtSecret string `mapstructure:"jwt_secret"`
 	RateLimit struct {

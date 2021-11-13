@@ -12,9 +12,10 @@ func FlushCacheMiddleware(c *gin.Context) {
 		http.MethodPut,
 		http.MethodDelete,
 	}
+	user := c.MustGet("user").(*util.User)
 	for _, v := range methods {
 		if c.Request.Method == v {
-			util.GetCacheDrive(c.MustGet("username").(string)).Flush()
+			util.GetCacheDrive(user.Email).Flush()
 			break
 		}
 

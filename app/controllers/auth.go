@@ -2,18 +2,30 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/aoaostar/v8cdn_panel/app/util"
+	"github.com/aoaostar/v8cdn_panel/pkg"
+	"github.com/cloudflare/cloudflare-go"
 	"github.com/gin-gonic/gin"
-	config "github.com/spf13/viper"
-	"net/http"
+	"github.com/sirupsen/logrus"
 	"net/url"
 )
 
-type UserInfo struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
+type (
+	Auth struct {
+	}
+	LoginParam struct {
+		Email      string `json:"email" binding:"required,email"`
+		Password   string `json:"password" binding:"required_without=UserApiKey"`
+		UserApiKey string `json:"user_api_key" binding:"omitempty,min=1"`
+	}
+	UserInfo struct {
+		Email      string
+		UserKey    string
+		UserApiKey string
+	}
+)
 type CloudflareResponse struct {
 	Msg     interface{} `json:"msg"`
 	Request struct {
@@ -28,60 +40,92 @@ type CloudflareResponse struct {
 	Result string `json:"result"`
 }
 
-func Login(c *gin.Context) {
+func (i *Auth) Login(c *gin.Context) {
 	//https://api.cloudflare.com/host-gw.html
-	var user UserInfo
-	err := c.ShouldBind(&user)
+	params := &LoginParam{}
+	err := c.ShouldBind(&params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, util.Msg("error", "无效的参数", nil))
+		validateError, _ := util.FomateValidateError(err)
+		util.JSON(c, "error", validateError)
 		return
 	}
-	v8cdnPost := util.V8cdnPostForm("https://api.cloudflare.com/host-gw.html", url.Values{
-		"act":              {"user_auth"},
-		"host_key":         {config.GetString("cloudflare.host_key")},
-		"cloudflare_email": {user.Username},
-		"cloudflare_pass":  {user.Password},
-	})
-	var data CloudflareResponse
-	err = json.Unmarshal([]byte(v8cdnPost), &data)
+	userInfo := &util.User{}
+	if params.UserApiKey == "" {
+		if pkg.Conf.Cloudflare.HostKey == "" {
+			util.JSON(c, "error", "HostKey有误，无法使用密码登录")
+			return
+		}
+		userInfo, err = i.authByPartner(params)
+	} else {
+		userInfo, err = i.authByKey(c, params)
+	}
+	if err != nil {
+		util.JSON(c, "error", err.Error())
+		return
+	}
+	token, err := util.GenerateToken(*userInfo)
 
 	if err != nil {
-		c.JSON(http.StatusOK, util.Msg(
-			"error",
-			"请求失败", nil,
-		))
+		util.JSON(c, "error", "无效的参数", nil)
 		return
+	}
+	util.JSON(c, "ok", "success", gin.H{
+		"token": token,
+	})
+}
+
+func (i *Auth) authByKey(c *gin.Context, params *LoginParam) (*util.User, error) {
+	api, err := cloudflare.New(params.UserApiKey, params.Email)
+	if err != nil {
+		return nil, err
+	}
+	_, err = api.UserDetails(c)
+	if err != nil {
+		return nil, errors.New("key无效")
+	}
+	//accounts, _, err := api.Accounts(c, cloudflare.PaginationOptions{
+	//	Page:    1,
+	//	PerPage: 1,
+	//})
+	//if err != nil || len(accounts) <= 0 {
+	//	return nil, errors.New("key无效")
+	//}
+	userInfo := &util.User{}
+	//userInfo.ID = accounts[0].ID
+	userInfo.Email = params.Email
+	userInfo.UserApiKey = params.UserApiKey
+	userInfo.AuthType = "user_api_key"
+	return userInfo, nil
+}
+
+func (i *Auth) authByPartner(params *LoginParam) (*util.User, error) {
+
+	v8cdnPost := util.V8cdnPostForm("https://api.cloudflare.com/host-gw.html", url.Values{
+		"act":              {"user_auth"},
+		"host_key":         {pkg.Conf.Cloudflare.HostKey},
+		"cloudflare_email": {params.Email},
+		"cloudflare_pass":  {params.Password},
+	})
+	logrus.WithFields(logrus.Fields{
+		"data": v8cdnPost,
+	}).Debug()
+	data := &CloudflareResponse{}
+	userInfo := &util.User{}
+	err := json.Unmarshal([]byte(v8cdnPost), &data)
+
+	if err != nil {
+		return nil, errors.New("请求失败")
 	}
 	if data.Result != "success" {
 		message := "未知异常"
 		if data.Msg != nil {
 			message = fmt.Sprintf("%v", data.Msg)
 		}
-		c.JSON(http.StatusOK, util.Msg("error", message, nil))
-		return
-
+		return nil, errors.New(message)
 	}
-	token, err := util.GenerateToken(data.Response.CloudflareEmail, data.Response.UserKey, data.Response.UserApiKey)
-
-	if err != nil {
-
-		c.JSON(http.StatusOK, util.Msg("error", "无效的参数", nil))
-		return
-	}
-	c.JSON(http.StatusOK, util.Msg("ok", "success", gin.H{
-		"token": token,
-	}))
-
-}
-func Parse(c *gin.Context) {
-	token := c.PostForm("token")
-	c.JSON(http.StatusOK, gin.H{
-		"data": token,
-	})
-	parseToken, _ := util.ParseToken(token)
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": parseToken,
-	})
-
+	userInfo.Email = data.Response.CloudflareEmail
+	userInfo.UserKey = data.Response.UserKey
+	userInfo.UserApiKey = data.Response.UserApiKey
+	userInfo.AuthType = "partner"
+	return userInfo, nil
 }

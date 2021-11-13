@@ -4,104 +4,111 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aoaostar/v8cdn_panel/app/util"
-	"github.com/aoaostar/v8cdn_panel/config"
+	"github.com/aoaostar/v8cdn_panel/pkg"
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 	"net/url"
 )
 
-type param struct {
-	ZoneName string `form:"zone_name" json:"zone_name" binding:"omitempty,required_without=ZoneId,hostname"`
-	ZoneId   string `form:"zone_id" json:"zone_id" binding:"omitempty,required_without=ZoneName,len=32"`
+type Zone struct {
 }
 
-// ShowZones 获取域名列表
-func ShowZones(c *gin.Context) {
+// List 获取域名列表
+func (z *Zone) List(c *gin.Context) {
 
 	//获取缓存
 	if zones, b := util.GetCache(c, "zones"); b {
-		c.JSON(http.StatusOK, util.Msg("ok", "success", zones))
+		util.JSON(c, "ok", "success", zones)
 		return
 	}
 	//缓存结束
 	cf := c.MustGet("cloudflare").(*cloudflare.API)
 	zones, err := cf.ListZones(c)
 
-	log.Debug(zones)
+	log.WithFields(log.Fields{
+		"data": zones,
+	}).Debug()
 	if err != nil {
 		log.Debug(err)
-		c.JSON(http.StatusOK, util.Msg("error", err.Error(), err))
+		util.JSON(c, "error", err.Error(), err)
 		return
 	}
 	//缓存结果
 	util.SetCache(c, "zones", zones)
-	c.JSON(http.StatusOK, util.Msg("ok", "success", zones))
+	util.JSON(c, "ok", "success", zones)
 }
 
-// DetailZone 显示域名详情
-func DetailZone(c *gin.Context) {
+// Get 显示域名详情
+func (z *Zone) Get(c *gin.Context) {
 
-	var postData param
-	if err := c.ShouldBindQuery(&postData); err != nil {
-		util.PrintError(err,c)
+	var params ZoneParam
+	if err := c.ShouldBind(&params); err != nil {
+		validateError, _ := util.FomateValidateError(err)
+		util.JSON(c, "error", validateError)
 		return
 	}
 	cf := c.MustGet("cloudflare").(*cloudflare.API)
 
-	if postData.ZoneId == "" {
-		if ZoneId, err := cf.ZoneIDByName(postData.ZoneName); err != nil {
-			postData.ZoneId = ZoneId
-			log.Debug(postData.ZoneId)
-			c.JSON(http.StatusOK, util.Msg(
+	if params.ZoneId == "" {
+		if ZoneId, err := cf.ZoneIDByName(params.ZoneName); err != nil {
+			params.ZoneId = ZoneId
+			log.Debug(params.ZoneId)
+			util.JSON(c,
 				"error",
 				fmt.Sprintf("zoneId获取失败：%v", err), err,
-			))
+			)
 			return
 		}
 	}
-	details, err := cf.ZoneDetails(c, postData.ZoneId)
-	log.Debug(details)
+	details, err := cf.ZoneDetails(c, params.ZoneId)
+	log.WithFields(log.Fields{
+		"data": details,
+	}).Debug()
 	if err != nil {
-		c.JSON(http.StatusOK, util.Msg(
+		util.JSON(c,
 			"error",
 			err.Error(), nil,
-		))
+		)
 		return
 	}
-	c.JSON(http.StatusOK, util.Msg("ok", "success", details))
+	util.JSON(c, "ok", "success", details)
 }
 
-// CreateZone 添加域名
-func CreateZone(c *gin.Context) {
+// Create 添加域名
+func (z *Zone) Create(c *gin.Context) {
 
 	type param struct {
 		ZoneName string `json:"zone_name" valid:"required,url"`
 	}
 	var postData param
 
-	if err := c.BindJSON(&postData); err != nil {
-		util.PrintError(err,c)
+	if err := c.ShouldBind(&postData); err != nil {
+		validateError, _ := util.FomateValidateError(err)
+		util.JSON(c, "error", validateError)
+		return
+	}
+	user := c.MustGet("user").(*util.User)
+	if user.AuthType == "user_api_key" || user.UserKey == "" {
+		util.JSON(c, "error", "user_api_key接入方式不支持添加域名")
 		return
 	}
 	v8cdnPost := util.V8cdnPostForm("https://api.cloudflare.com/host-gw.html", url.Values{
 		"act":        {"zone_set"},
-		"host_key":   {config.Conf.Cloudflare.HostKey},
-		"user_key":   {c.MustGet("user_key").(string)},
+		"host_key":   {pkg.Conf.Cloudflare.HostKey},
+		"user_key":   {user.UserKey},
 		"zone_name":  {postData.ZoneName},
-		"resolve_to": {"v8cdn.cc"},
+		"resolve_to": {pkg.Conf.Cloudflare.DefaultRecord},
 		"subdomains": {"@,www"},
 	})
-	log.Debug(v8cdnPost)
+	log.WithFields(log.Fields{
+		"data": v8cdnPost,
+	}).Debug()
 	var data gin.H
 	err := json.Unmarshal([]byte(v8cdnPost), &data)
 
 	if err != nil {
-		c.JSON(http.StatusOK, util.Msg(
-			"error",
-			err.Error(), nil,
-		))
+		util.JSON(c, "error", err.Error())
 		return
 	}
 	if data["result"] != "success" {
@@ -109,24 +116,25 @@ func CreateZone(c *gin.Context) {
 		if data["msg"] != nil {
 			message = fmt.Sprintf("%v", data["msg"])
 		}
-		c.JSON(http.StatusOK, util.Msg("error", message, nil))
+		util.JSON(c, "error", message, nil)
 		return
 
 	}
 	if err != nil {
-		c.JSON(http.StatusOK, util.Msg("error", err.Error(), err))
+		util.JSON(c, "error", err.Error(), err)
 		return
 	}
-	c.JSON(http.StatusOK, util.Msg("ok", "success", data))
+	util.JSON(c, "ok", "success", data)
 
 }
 
-// DeleteZone 删除域名
-func DeleteZone(c *gin.Context) {
+// Delete 删除域名
+func (z *Zone) Delete(c *gin.Context) {
 
-	var postData param
-	if err := c.ShouldBindQuery(&postData); err != nil {
-		util.PrintError(err,c)
+	var postData ZoneParam
+	if err := c.ShouldBind(&postData); err != nil {
+		validateError, _ := util.FomateValidateError(err)
+		util.JSON(c, "error", validateError)
 		return
 	}
 	cf := c.MustGet("cloudflare").(*cloudflare.API)
@@ -134,24 +142,41 @@ func DeleteZone(c *gin.Context) {
 		if ZoneId, err := cf.ZoneIDByName(postData.ZoneName); err != nil {
 			postData.ZoneId = ZoneId
 			log.Debug(postData.ZoneId)
-			c.JSON(http.StatusOK, util.Msg(
+			util.JSON(c,
 				"error",
 				fmt.Sprintf("zoneId获取失败：%v", err), err,
-			))
+			)
 			return
 		}
 	}
 	data, err := cf.DeleteZone(c, postData.ZoneId)
-	log.Debug(data)
+	log.WithFields(log.Fields{
+		"data": data,
+	}).Debug()
 	if err != nil {
 		log.Debug(err)
-		c.JSON(http.StatusOK, util.Msg("error", err.Error(), err))
+		util.JSON(c, "error", err.Error(), err)
 		return
 	}
 
-	c.JSON(http.StatusOK, util.Msg("ok", "success", data))
+	util.JSON(c, "ok", "success", data)
 }
 
-// UpdateZone 更新域名
-func UpdateZone(c *gin.Context) {
+// Update 更新域名
+func (z *Zone) Update(c *gin.Context) {
+}
+
+func (z *Zone) createZoneByNs(c *gin.Context,ZoneName string) error {
+
+	cf := c.MustGet("cloudflare").(*cloudflare.API)
+	user := c.MustGet("user").(*util.User)
+	account := cloudflare.Account{
+		ID:       user.ID,
+	}
+	_, err := cf.CreateZone(c, ZoneName, false, account, "full")
+	if err != nil {
+		return err
+	}
+	return nil
+
 }

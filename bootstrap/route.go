@@ -15,37 +15,44 @@ func InitRouter(engine *gin.Engine) {
 func InitApiRouter(engine *gin.Engine) {
 	engine.Use(middleware.CorsMiddleware)
 	engine.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK,c.FullPath())
+		c.JSON(http.StatusOK, c.FullPath())
 
 	})
 	auth := engine.Group("/auth", middleware.RateLimitMiddleware)
 	{
-
-		auth.POST("/login", controllers.Login)
-		auth.POST("/parse", controllers.Parse)
+		authController := new(controllers.Auth)
+		auth.POST("/login", authController.Login)
 	}
 
 	api := engine.Group("/api", middleware.JWTAuthMiddleware)
 	{
+		ZoneController := new(controllers.Zone)
+		DnsrecordsController := new(controllers.Dnsrecords)
+		CacheController := new(controllers.Cache)
+		SettingsController := new(controllers.Setting)
+
 		api.Use(middleware.RateLimitMiddleware)
 		api.Use(middleware.FlushCacheMiddleware)
 		api.GET("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, util.Msg("ok", "success", nil))
 		})
-		api.GET("/zones", controllers.ShowZones)
-		api.GET("/zone", controllers.DetailZone)
-		api.POST("/zone", controllers.CreateZone)
-		api.DELETE("/zone", controllers.DeleteZone)
-		api.PUT("/zone", controllers.UpdateZone)
+		api.GET("/zones", ZoneController.List)
+		api.GET("/zone", ZoneController.Get)
+		api.POST("/zone", ZoneController.Create)
+		api.DELETE("/zone", ZoneController.Delete)
+		api.PUT("/zone", ZoneController.Update)
 
-		api.GET("/dnsrecords", controllers.ShowDNSRecords)
-		api.GET("/dnsrecord", controllers.DetailDNSRecord)
-		api.POST("/dnsrecord", controllers.CreateDNSRecord)
-		api.DELETE("/dnsrecord", controllers.DeleteDNSRecord)
-		api.PUT("/dnsrecord", controllers.UpdateDNSRecord)
+		api.GET("/dnsrecords", DnsrecordsController.List)
+		api.GET("/dnsrecord", DnsrecordsController.Get)
+		api.POST("/dnsrecord", DnsrecordsController.Create)
+		api.DELETE("/dnsrecord", DnsrecordsController.Delete)
+		api.PUT("/dnsrecord", DnsrecordsController.Update)
 
-		api.GET("/AccountDetails", controllers.AccountDetails)
-		api.GET("/UserDetails", controllers.UserDetails)
-		api.GET("/CreateZone", controllers.CreateZone)
+		api.POST("/cache", CacheController.Clear)
+
+		api.GET("/settings", SettingsController.List)
+		api.GET("/setting", SettingsController.Get)
+		api.PUT("/setting", SettingsController.Put)
+		api.PATCH("/setting", SettingsController.Patch)
 	}
 }
